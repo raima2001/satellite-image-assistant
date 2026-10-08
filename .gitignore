@@ -1,0 +1,22 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.env
+.DS_Store
+
+# Local tooling and assignment brief, not part of the project
+.claude/
+.claudeignore
+claude.md
+CLAUDE.md
+*.pdf
+
+# Traces: only the recorded examples cited in the README are kept
+traces/*
+!traces/a2a-final.jsonl
+!traces/groq-test-1.jsonl
+!traces/grounding-test-1.jsonl
+!traces/skill-check-2.jsonl
+!traces/test-1.jsonl
+!traces/demo-2.jsonl
