@@ -44,7 +44,6 @@ With the API running, open a second terminal for an interactive chat that render
 uv run python demos/chat.py --session demo-3
 ```
 
-All messages in one run share the session ID. Type `/trace` to print a one-line-per-step summary of the session's trace, and `/exit` to quit. The three demo messages below can be typed here directly.
 
 ## Three-turn HTTP demo
 
