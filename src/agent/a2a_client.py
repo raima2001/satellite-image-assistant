@@ -1,7 +1,7 @@
-"""Bonus 3.A: the primary agent's A2A v0.3.0 client.
+"""Bonus 3.A: the primary agent's A2A v1.0 client.
 
-Discovers the geo agent's Agent Card and sends a message/send request
-to its advertised endpoint. The geo service must be running separately.
+Discovers the geo agent's Agent Card and sends a JSON-RPC SendMessage
+request to the endpoint its card advertises. The geo service must be running separately.
 """
 
 import json
@@ -14,6 +14,7 @@ from langchain_core.tools import tool
 GEO_AGENT_URL = os.environ.get(
     "GEO_AGENT_URL", "http://localhost:8001"
 ).rstrip("/")
+A2A_VERSION = "1.0"
 
 
 def fetch_agent_card(base_url: str = GEO_AGENT_URL) -> dict:
@@ -42,13 +43,23 @@ def delegate_place_lookup(
     try:
         card = fetch_agent_card(base_url)
 
-        if card.get("protocolVersion") != "0.3.0":
-            raise ValueError("Expected an A2A v0.3.0 Agent Card.")
+        # Use the first advertised interface this client can speak.
+        interface = next(
+            (
+                entry
+                for entry in card.get("supportedInterfaces", [])
+                if isinstance(entry, dict)
+                and entry.get("protocolBinding") == "JSONRPC"
+                and entry.get("protocolVersion") == A2A_VERSION
+            ),
+            None,
+        )
+        if interface is None:
+            raise ValueError(
+                f"The Agent Card has no JSONRPC interface for A2A {A2A_VERSION}."
+            )
 
-        if card.get("preferredTransport", "JSONRPC") != "JSONRPC":
-            raise ValueError("This client requires JSONRPC transport.")
-
-        endpoint = card.get("url")
+        endpoint = interface.get("url")
         if not isinstance(endpoint, str) or not endpoint:
             raise ValueError("The Agent Card has no valid endpoint URL.")
 
@@ -66,15 +77,12 @@ def delegate_place_lookup(
         payload = {
             "jsonrpc": "2.0",
             "id": request_id,
-            "method": "message/send",
+            "method": "SendMessage",
             "params": {
                 "message": {
-                    "kind": "message",
-                    "role": "user",
+                    "role": "ROLE_USER",
                     "messageId": str(uuid4()),
-                    "parts": [
-                        {"kind": "text", "text": place_name}
-                    ],
+                    "parts": [{"text": place_name}],
                 }
             },
         }
@@ -82,6 +90,7 @@ def delegate_place_lookup(
         response = httpx.post(
             endpoint,
             json=payload,
+            headers={"A2A-Version": A2A_VERSION},
             timeout=45.0,
         )
         response.raise_for_status()
@@ -105,14 +114,16 @@ def delegate_place_lookup(
             )
             raise ValueError(detail)
 
-        message = body.get("result")
-        if not isinstance(message, dict):
+        result = body.get("result")
+        if not isinstance(result, dict):
             raise ValueError("The response is missing its result.")
 
-        # This client supports the geo service's immediate Message replies.
+        # SendMessage returns either a Task or a Message; this client
+        # supports the geo service's immediate Message replies.
+        message = result.get("message")
         if (
-            message.get("kind") != "message"
-            or message.get("role") != "agent"
+            not isinstance(message, dict)
+            or message.get("role") != "ROLE_AGENT"
             or not isinstance(message.get("messageId"), str)
             or not message["messageId"]
         ):
@@ -126,7 +137,6 @@ def delegate_place_lookup(
             part["text"]
             for part in parts
             if isinstance(part, dict)
-            and part.get("kind") == "text"
             and isinstance(part.get("text"), str)
         ]
         if not text_parts:

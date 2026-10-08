@@ -3,7 +3,7 @@
 Needs the geo agent running first: python src/geo_agent/service.py
 
 Fetches the Agent Card from its well-known path, then sends it one A2A
-message/send task through the same client code the main agent uses
+SendMessage task through the same client code the main agent uses
 (agent.a2a_client), and prints the request and response.
 """
 

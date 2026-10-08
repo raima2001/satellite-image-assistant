@@ -1,6 +1,6 @@
-"""Bonus 3.A: a separate geocoding agent using A2A v0.3.0.
+"""Bonus 3.A: a separate geocoding agent using A2A v1.0.
 
-Publishes an Agent Card and supports JSON-RPC message/send.
+Publishes an Agent Card and supports the JSON-RPC SendMessage method.
 Run: uv run python src/geo_agent/service.py
 """
 
@@ -14,24 +14,30 @@ from fastapi.responses import JSONResponse
 
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 USER_AGENT = "satellite-image-assistant-geo-agent/1.0"
+# A2A versions are Major.Minor on the wire; 1.0.x patch releases share "1.0".
+A2A_VERSION = "1.0"
 
 AGENT_CARD = {
-    "protocolVersion": "0.3.0",
     "name": "place-geocoder",
     "description": (
         "Resolves a place name to a bounding box "
         "(min_lon, min_lat, max_lon, max_lat) "
         "using OpenStreetMap Nominatim."
     ),
-    "url": "http://localhost:8001/",
-    "preferredTransport": "JSONRPC",
+    "supportedInterfaces": [
+        {
+            "url": "http://localhost:8001/",
+            "protocolBinding": "JSONRPC",
+            "protocolVersion": A2A_VERSION,
+        }
+    ],
     "version": "1.0.0",
     "capabilities": {
         "streaming": False,
         "pushNotifications": False,
     },
-    "defaultInputModes": ["text"],
-    "defaultOutputModes": ["text"],
+    "defaultInputModes": ["text/plain"],
+    "defaultOutputModes": ["application/json"],
     "skills": [
         {
             "id": "resolve-place-to-bbox",
@@ -102,6 +108,9 @@ async def rpc(request: Request) -> JSONResponse:
         return rpc_error(None, -32600, "Invalid request: expected an object.")
 
     request_id = body.get("id")
+    # A missing A2A-Version header means 0.3 under the spec; this service
+    # only speaks 1.0.
+    requested_version = request.headers.get("A2A-Version", "0.3")
     if (
         body.get("jsonrpc") != "2.0"
         or not isinstance(body.get("method"), str)
@@ -114,7 +123,14 @@ async def rpc(request: Request) -> JSONResponse:
             "Invalid request: expected jsonrpc '2.0', method, and an id.",
         )
 
-    if body["method"] != "message/send":
+    if requested_version != A2A_VERSION:
+        return rpc_error(
+            request_id,
+            -32009,
+            f"A2A version {requested_version} is not supported; use {A2A_VERSION}.",
+        )
+
+    if body["method"] != "SendMessage":
         return rpc_error(request_id, -32601, "Method not found.")
 
     params = body.get("params")
@@ -125,12 +141,8 @@ async def rpc(request: Request) -> JSONResponse:
     if not isinstance(message, dict):
         return rpc_error(request_id, -32602, "message must be an object.")
 
-    if message.get("kind") != "message" or message.get("role") != "user":
-        return rpc_error(
-            request_id,
-            -32602,
-            "Expected message kind 'message' and role 'user'.",
-        )
+    if message.get("role") != "ROLE_USER":
+        return rpc_error(request_id, -32602, "Expected role 'ROLE_USER'.")
 
     message_id = message.get("messageId")
     if not isinstance(message_id, str) or not message_id.strip():
@@ -159,13 +171,10 @@ async def rpc(request: Request) -> JSONResponse:
         if not isinstance(part, dict):
             return rpc_error(request_id, -32602, "Invalid message part.")
 
-        if part.get("kind") != "text":
+        if not isinstance(part.get("text"), str):
             return rpc_error(
                 request_id, -32005, "Only text parts are supported."
             )
-
-        if not isinstance(part.get("text"), str):
-            return rpc_error(request_id, -32602, "Text must be a string.")
 
         text_parts.append(part["text"])
 
@@ -193,20 +202,16 @@ async def rpc(request: Request) -> JSONResponse:
             "jsonrpc": "2.0",
             "id": request_id,
             "result": {
-                "messageId": str(uuid4()),
-                "contextId": context_id or str(uuid4()),
-                "role": "agent",
-                "kind": "message",
-                "parts": [
-                    {
-                        "kind": "text",
-                        "text": json.dumps(result),
-                    }
-                ],
+                "message": {
+                    "messageId": str(uuid4()),
+                    "contextId": context_id or str(uuid4()),
+                    "role": "ROLE_AGENT",
+                    "parts": [{"text": json.dumps(result)}],
+                }
             },
         }
     )
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    uvicorn.run(app, host="127.0.0.1", port=8001)
