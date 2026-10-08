@@ -557,6 +557,4 @@ uv run pytest
 
 Left out, and why: the project selects candidate scenes; it does not download imagery, calculate NDVI, or assess vegetation health. That keeps the scope small enough to finish and verify end to end. Pagination and durable checkpoints were also cut for time.
 
-Next improvements would be catalogue pagination, durable checkpoint
-storage with retention limits, retries for model-provider errors,
-and richer traces containing request identifiers and bounded tool results.
+Next, I would strengthen the agent’s execution and evaluation harness. I would add repeatable tests for tool selection, multi-turn reference resolution, grounding, and error recovery; enforce tool-call and time limits; and handle model-provider failures with selective retries and clear responses. I would also add token-budgeted context management, durable checkpoints with retention limits, catalogue pagination, and request-linked traces containing bounded tool results.
