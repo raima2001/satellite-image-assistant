@@ -34,7 +34,7 @@ Wait for `Application startup complete`. The API launches the MCP server automat
 
 The model runs on Groq through its OpenAI-compatible endpoint, `https://api.groq.com/openai/v1`, using LangChain's `ChatOpenAI`. No local model download or GPU is required. Groq offers a Free plan with request and token limits; availability and account quotas can change. An agent turn can require several model requests. Keep API keys out of source control.
 
-If dependencies are changed during development, run `uv lock` and `uv sync`, then commit both `pyproject.toml` and `uv.lock`. Reviewers should not need to regenerate the lockfile.
+If dependencies are changed during development, run `uv lock` and `uv sync`, then commit both `pyproject.toml` and `uv.lock`.
 
 ## Chat from the terminal
 
