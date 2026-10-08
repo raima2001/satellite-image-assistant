@@ -166,6 +166,11 @@ def _session_id(config: RunnableConfig | None) -> str:
     return (config or {}).get("configurable", {}).get("thread_id", "unknown")
 
 
+def _tool_error_message(error: Exception) -> str:
+    """Turn any tool exception into an error result the model can explain."""
+    return f"Error: {error}"
+
+
 def build_graph(tools: list[BaseTool]):
     """Compile the agent graph.
 
@@ -182,7 +187,7 @@ def build_graph(tools: list[BaseTool]):
     facts untouched so the conversation keeps going.
     """
     model = build_model(tools)
-    tool_node = ToolNode(tools)
+    tool_node = ToolNode(tools, handle_tool_errors=_tool_error_message)
 
     def call_model(state: AgentState, config: RunnableConfig) -> dict:
         session_id = _session_id(config)
@@ -231,9 +236,9 @@ def build_graph(tools: list[BaseTool]):
     async def run_tools(state: AgentState, config: RunnableConfig) -> dict:
         """Run the pending tool calls and trace/log each result.
 
-        A failing tool does not raise here: the MCP tool raises a clear error
-        on its side, and the MCP client turns that into a `ToolMessage` with
-        `status="error"` instead of an exception, so this stays a normal step.
+        A failing tool does not raise here: any tool exception (an MCP error,
+        or the A2A geo agent being unreachable) becomes a `ToolMessage` with
+        `status="error"` via `_tool_error_message`, so this stays a normal step.
         """
         session_id = _session_id(config)
         tool_calls = {call["id"]: call for call in state["messages"][-1].tool_calls}
