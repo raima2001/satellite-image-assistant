@@ -240,11 +240,12 @@ separate from the primary LangGraph agent and API on port 8000.
    model can call the `resolve_place_to_bbox` tool.
 2. The A2A client fetches the geo agent’s Agent Card from
    `GET /.well-known/agent-card.json`.
-3. It checks that the card advertises A2A `0.3.0`, JSON-RPC transport, and
-   the `resolve-place-to-bbox` capability.
-4. It sends a JSON-RPC `message/send` request to the endpoint advertised
-   in the card’s `url` field. The request includes a request ID and a
-   separate message ID.
+3. It picks the card's `supportedInterfaces` entry with `protocolBinding`
+   `JSONRPC` and `protocolVersion` `1.0`, and checks that the card
+   advertises the `resolve-place-to-bbox` skill.
+4. It sends a JSON-RPC `SendMessage` request, with the `A2A-Version: 1.0`
+   header, to that interface's `url`. The request includes a request ID
+   and a separate message ID.
 5. The geo agent queries Nominatim and returns a matched place name and
    bounding box.
 6. The client validates the response ID, message structure, and coordinate
@@ -289,17 +290,21 @@ The card includes:
 
 ```json
 {
-  "protocolVersion": "0.3.0",
   "name": "place-geocoder",
-  "url": "http://localhost:8001/",
-  "preferredTransport": "JSONRPC",
+  "supportedInterfaces": [
+    {
+      "url": "http://localhost:8001/",
+      "protocolBinding": "JSONRPC",
+      "protocolVersion": "1.0"
+    }
+  ],
   "version": "1.0.0",
   "capabilities": {
     "streaming": false,
     "pushNotifications": false
   },
-  "defaultInputModes": ["text"],
-  "defaultOutputModes": ["text"],
+  "defaultInputModes": ["text/plain"],
+  "defaultOutputModes": ["application/json"],
   "skills": [
     {
       "id": "resolve-place-to-bbox",
@@ -365,8 +370,11 @@ invalid. The error names the attempted place lookup. Turning that exception
 into a user-facing tool result is the responsibility of the primary graph’s
 tool-error handling.
 
-This is a hand-written A2A v0.3.0 JSON-RPC subset supporting immediate
-`message/send` replies. It does not use `a2a-sdk` or implement streaming,
+This is a hand-written subset of the A2A v1.0 JSON-RPC binding (spec
+release 1.0.1; the wire version is `1.0`) supporting immediate
+`SendMessage` replies that return a `Message`. Requests without an
+`A2A-Version: 1.0` header are rejected with error `-32009`, since the spec
+treats a missing header as 0.3. It does not use `a2a-sdk` or implement streaming,
 push notifications, persistent tasks, or multi-turn conversations in the
 geo service. Successful demonstrations verify the implemented path;
 they are not a full protocol-conformance test.
