@@ -1,8 +1,9 @@
 """Section 2.5 - the HTTP API.
 
-Exposes the agent (2.1-2.4) over HTTP. One endpoint: POST /chat takes a
-message and a session id and returns the agent's reply for that session. The
-MCP server (2.3) is started once, at startup, as the agent's tool connection.
+Exposes the agent (2.1-2.4) over HTTP. POST /chat takes a message and a
+session id and returns the agent's reply for that session. Two read-only debug
+endpoints show a session's saved state and its checkpoint history. The MCP
+server (2.3) is started once, at startup, as the agent's tool connection.
 
 Run with: python src/api/app.py
 """
@@ -20,7 +21,7 @@ from dotenv import load_dotenv
 # modules read them. Variables already exported in the shell take precedence.
 load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel
@@ -84,6 +85,51 @@ async def chat(request: ChatRequest) -> ChatResponse:
             },
         )
     return ChatResponse(session_id=session_id, reply=result["messages"][-1].content)
+
+
+def _thread_config(session_id: str) -> dict:
+    return {"configurable": {"thread_id": session_id}}
+
+
+@app.get("/sessions/{session_id}/state")
+async def session_state(session_id: str) -> dict:
+    """The latest checkpoint for a session: its pinned facts and message count."""
+    snapshot = await app.state.graph.aget_state(_thread_config(session_id))
+    if not snapshot.values:
+        raise HTTPException(status_code=404, detail="No state for that session id.")
+    return {
+        "session_id": session_id,
+        "checkpoint_id": snapshot.config["configurable"].get("checkpoint_id"),
+        "created_at": snapshot.created_at,
+        "criteria": snapshot.values.get("criteria"),
+        "shortlist": snapshot.values.get("shortlist"),
+        "selected": snapshot.values.get("selected"),
+        "message_count": len(snapshot.values.get("messages", [])),
+    }
+
+
+@app.get("/sessions/{session_id}/history")
+async def session_history(session_id: str) -> dict:
+    """Every checkpoint for a session, newest first.
+
+    Lists each checkpoint's step and which node runs next, not the stored
+    values: older checkpoints can still hold full, untruncated tool results.
+    """
+    checkpoints = [
+        {
+            "checkpoint_id": snapshot.config["configurable"].get("checkpoint_id"),
+            "step": snapshot.metadata.get("step"),
+            "source": snapshot.metadata.get("source"),
+            "next": list(snapshot.next),
+            "created_at": snapshot.created_at,
+        }
+        async for snapshot in app.state.graph.aget_state_history(
+            _thread_config(session_id)
+        )
+    ]
+    if not checkpoints:
+        raise HTTPException(status_code=404, detail="No state for that session id.")
+    return {"session_id": session_id, "checkpoints": checkpoints}
 
 
 if __name__ == "__main__":

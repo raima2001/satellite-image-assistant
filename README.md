@@ -224,6 +224,8 @@ The invalid-ID test verified a logged tool failure, a clear reply, and successfu
 | --- | --- |
 | `GET /` | Health response: `{"status": "ok"}` |
 | `POST /chat` | Submit `message` and `session_id`; receive `session_id` and `reply` |
+| `GET /sessions/{session_id}/state` | Debug: latest checkpoint's pinned facts (criteria, shortlist, selected) and message count; 404 for an unknown session |
+| `GET /sessions/{session_id}/history` | Debug: every checkpoint for the session, newest first, with step, source, and next node (no stored values) |
 | `GET /docs` | Interactive request UI |
 
 Use a stable session ID for related turns and a fresh ID for a separate conversation. The API retains the graph and MCP client setup on application state across requests. Stop the API with `Ctrl+C` when finished.
