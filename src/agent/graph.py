@@ -171,6 +171,18 @@ def _tool_error_message(error: Exception) -> str:
     return f"Error: {error}"
 
 
+async def _retry_tool_call(request, execute):
+    """Retry a failed tool call once before giving up.
+
+    With `handle_tool_errors` set, `execute` does not raise on a tool failure;
+    it returns a `ToolMessage` with `status="error"`, so retry on that status.
+    """
+    result = await execute(request)
+    if isinstance(result, ToolMessage) and result.status == "error":
+        return await execute(request)
+    return result
+
+
 def build_graph(tools: list[BaseTool]):
     """Compile the agent graph.
 
@@ -187,7 +199,11 @@ def build_graph(tools: list[BaseTool]):
     facts untouched so the conversation keeps going.
     """
     model = build_model(tools)
-    tool_node = ToolNode(tools, handle_tool_errors=_tool_error_message)
+    tool_node = ToolNode(
+        tools,
+        handle_tool_errors=_tool_error_message,
+        awrap_tool_call=_retry_tool_call,
+    )
 
     def call_model(state: AgentState, config: RunnableConfig) -> dict:
         session_id = _session_id(config)
