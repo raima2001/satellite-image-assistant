@@ -6,24 +6,20 @@ MCP tool calls. Importing the tool functions from src/mcp_server directly
 would not go through MCP, so the graph never does that.
 """
 
-import sys
 from pathlib import Path
 
 from langchain_core.tools import BaseTool
-from langchain_mcp_adapters.client import MultiServerMCPClient
+from langchain.mcp import MCPAdapter
 
 SERVER_SCRIPT = Path(__file__).resolve().parent.parent / "mcp_server" / "server.py"
 
 
 async def load_mcp_tools() -> list[BaseTool]:
-    """Start the MCP server and return its tools as LangChain tools."""
-    client = MultiServerMCPClient(
-        {
-            "sentinel-catalogue": {
-                "transport": "stdio",
-                "command": sys.executable,
-                "args": [str(SERVER_SCRIPT)],
-            }
-        }
-    )
-    return await client.get_tools()
+    """Start the MCP server and return its tools as LangChain tools.
+
+    A `Path` target is launched over stdio with the current interpreter. The
+    returned tools keep the adapter's client, so they stay callable after the
+    context exits.
+    """
+    async with MCPAdapter(SERVER_SCRIPT) as adapter:
+        return await adapter.list_tools()

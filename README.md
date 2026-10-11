@@ -162,14 +162,14 @@ This run demonstrated context continuity and exposed unsupported metadata additi
 
 ## MCP server and grounding (2.3)
 
-`src/mcp_server/server.py` defines a custom `FastMCP` server. Both tools call the external Earth Search STAC API at <https://earth-search.aws.element84.com/v1>, using collection `sentinel-2-c1-l2a`.
+`src/mcp_server/server.py` defines a custom MCP server with the MCP Python SDK 2.x `MCPServer` (formerly `FastMCP`). Tool failures raise `ToolError`, so the readable message reaches the model; in SDK 2.x any other exception reaches it only as a generic "Error executing tool". Both tools call the external Earth Search STAC API at <https://earth-search.aws.element84.com/v1>, using collection `sentinel-2-c1-l2a`.
 
 | Tool | External operation | Returned data |
 | --- | --- | --- |
 | `search_scenes` | `POST /search` | Search criteria and a shortlist of scene IDs, datetimes, and cloud cover, sorted by cloud cover |
 | `get_scene_details` | `GET /collections/{collection}/items/{scene_id}` | Scene ID, datetime, cloud cover, and sorted asset names |
 
-`src/agent/mcp_tools.py` starts the server over stdio and uses `langchain-mcp-adapters` to expose MCP-backed tools to the graph. The graph receives these tools rather than importing the server's Python tool functions. The tools node runs asynchronously, and the API drives the graph with `ainvoke`.
+`src/agent/mcp_tools.py` starts the server over stdio and uses LangChain's built-in `langchain.mcp` `MCPAdapter` (beta, from `langchain[mcp]`) to expose MCP-backed tools to the graph. The graph receives these tools rather than importing the server's Python tool functions. The tools node runs asynchronously, and the API drives the graph with `ainvoke`.
 
 The API starts the MCP process automatically. Its standalone stdio entry point is:
 

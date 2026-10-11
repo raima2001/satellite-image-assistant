@@ -10,12 +10,13 @@ src/agent/mcp_tools.py). Not meant to be imported as a library.
 import json
 
 import httpx
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 
 EARTH_SEARCH_URL = "https://earth-search.aws.element84.com/v1"
 COLLECTION = "sentinel-2-c1-l2a"
 
-mcp = FastMCP("sentinel-catalogue")
+mcp = MCPServer("sentinel-catalogue")
 
 
 @mcp.tool()
@@ -53,12 +54,12 @@ def search_scenes(
         response.raise_for_status()
         features = response.json()["features"]
     except httpx.HTTPStatusError as error:
-        raise ValueError(
+        raise ToolError(
             f"Could not {attempted}: the catalogue rejected the request "
             f"({error.response.status_code}). Check the dates and bbox."
         ) from error
     except httpx.RequestError as error:
-        raise ValueError(f"Could not {attempted}: {error}") from error
+        raise ToolError(f"Could not {attempted}: {error}") from error
 
     scenes = [
         {
@@ -98,16 +99,16 @@ def get_scene_details(scene_id: str) -> str:
             timeout=30.0,
         )
         if response.status_code == 404:
-            raise ValueError(f"Could not {attempted}: no scene with that id exists.")
+            raise ToolError(f"Could not {attempted}: no scene with that id exists.")
         response.raise_for_status()
         feature = response.json()
     except httpx.HTTPStatusError as error:
-        raise ValueError(
+        raise ToolError(
             f"Could not {attempted}: the catalogue returned "
             f"{error.response.status_code}."
         ) from error
     except httpx.RequestError as error:
-        raise ValueError(f"Could not {attempted}: {error}") from error
+        raise ToolError(f"Could not {attempted}: {error}") from error
 
     return json.dumps(
         {
